@@ -6,50 +6,98 @@ import re
 
 
 def get_latest_newsletter_via_rss(newsletter_url: str) -> tuple[str, str]:
-    """Fallback method using RSS feed - more reliable for GitHub Actions"""
-    try:
-        print("Trying RSS feed method...")
-        
-        # Get the subdomain from URL
-        subdomain = newsletter_url.replace('https://', '').replace('.substack.com', '')
-        rss_url = f"https://{subdomain}.substack.com/feed"
-        
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
-            'Accept-Language': 'en-US,en;q=0.9',
-            'Accept-Encoding': 'gzip, deflate, br',
-            'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive'
-        }
-        
-        print(f"Fetching RSS feed from: {rss_url}")
-        response = requests.get(rss_url, headers=headers, timeout=30)
-        response.raise_for_status()
-        
-        # Parse RSS feed
-        soup = BeautifulSoup(response.text, 'xml')
-        items = soup.find_all('item')
-        
-        if not items:
-            print("No items found in RSS feed")
-            return None, None
+    """Fallback method using RSS feed with multiple retry strategies"""
+    import time
+    import random
+    
+    # Multiple user agents to rotate through
+    user_agents = [
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
+        'curl/7.68.0',
+        'feedparser/6.0.10',
+        'Python-urllib/3.11'
+    ]
+    
+    # Get the subdomain from URL
+    subdomain = newsletter_url.replace('https://', '').replace('.substack.com', '')
+    rss_url = f"https://{subdomain}.substack.com/feed"
+    
+    # Try multiple approaches
+    for attempt in range(3):
+        try:
+            print(f"RSS attempt {attempt + 1}/3...")
             
-        latest_item = items[0]
-        post_url = latest_item.find('link').text.strip()
-        
-        print(f"Found latest post URL from RSS: {post_url}")
-        
-        # Get the full post content
-        print(f"Fetching full post content...")
-        post_response = requests.get(post_url, headers=headers, timeout=30)
-        post_response.raise_for_status()
-        
-        return post_response.text, post_url
-        
-    except Exception as e:
-        print(f"RSS method failed: {str(e)}")
-        return None, None
+            # Rotate user agent
+            user_agent = random.choice(user_agents)
+            
+            headers = {
+                'User-Agent': user_agent,
+                'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+                'Accept-Language': 'en-US,en;q=0.9',
+                'Accept-Encoding': 'gzip, deflate, br',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Upgrade-Insecure-Requests': '1',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none'
+            }
+            
+            print(f"Using User-Agent: {user_agent[:50]}...")
+            print(f"Fetching RSS feed from: {rss_url}")
+            
+            # Add some randomness to avoid bot detection
+            if attempt > 0:
+                delay = random.uniform(1, 3)
+                print(f"Waiting {delay:.1f} seconds...")
+                time.sleep(delay)
+            
+            session = requests.Session()
+            response = session.get(rss_url, headers=headers, timeout=30, allow_redirects=True)
+            response.raise_for_status()
+            
+            print(f"RSS feed fetched successfully! Content length: {len(response.text)}")
+            
+            # Parse RSS feed
+            soup = BeautifulSoup(response.text, 'xml')
+            items = soup.find_all('item')
+            
+            if not items:
+                print("No items found in RSS feed")
+                continue
+                
+            latest_item = items[0]
+            post_url = latest_item.find('link').text.strip()
+            
+            print(f"Found latest post URL from RSS: {post_url}")
+            
+            # Get the full post content with same session
+            print(f"Fetching full post content...")
+            post_response = session.get(post_url, headers=headers, timeout=30)
+            post_response.raise_for_status()
+            
+            print(f"Successfully fetched post content! Length: {len(post_response.text)}")
+            return post_response.text, post_url
+            
+        except requests.exceptions.HTTPError as e:
+            print(f"HTTP error on attempt {attempt + 1}: {e}")
+            if e.response.status_code == 403:
+                print("403 Forbidden - trying different approach...")
+                continue
+            else:
+                break
+        except Exception as e:
+            print(f"Attempt {attempt + 1} failed: {str(e)}")
+            if attempt < 2:
+                continue
+            else:
+                break
+    
+    print("All RSS attempts failed")
+    return None, None
 
 
 def get_latest_newsletter_html(newsletter_url: str) -> tuple[str, str]:
