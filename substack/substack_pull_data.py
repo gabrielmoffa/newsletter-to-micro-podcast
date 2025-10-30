@@ -5,44 +5,50 @@ from bs4 import BeautifulSoup
 import re
 
 
-def get_latest_newsletter_via_api(newsletter_url: str) -> tuple[str, str]:
-    """Fallback method using direct HTTP requests"""
+def get_latest_newsletter_via_rss(newsletter_url: str) -> tuple[str, str]:
+    """Fallback method using RSS feed - more reliable for GitHub Actions"""
     try:
-        print("Trying fallback method with direct HTTP requests...")
+        print("Trying RSS feed method...")
         
         # Get the subdomain from URL
         subdomain = newsletter_url.replace('https://', '').replace('.substack.com', '')
-        api_url = f"https://{subdomain}.substack.com/api/v1/posts"
+        rss_url = f"https://{subdomain}.substack.com/feed"
         
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'application/json',
-            'Referer': newsletter_url
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'application/rss+xml, application/xml, text/xml, */*',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive'
         }
         
-        print(f"Fetching from API: {api_url}")
-        response = requests.get(api_url, headers=headers, timeout=30)
+        print(f"Fetching RSS feed from: {rss_url}")
+        response = requests.get(rss_url, headers=headers, timeout=30)
         response.raise_for_status()
         
-        data = response.json()
-        posts = data.get('posts', [])
+        # Parse RSS feed
+        soup = BeautifulSoup(response.text, 'xml')
+        items = soup.find_all('item')
         
-        if not posts:
-            print("No posts found in API response")
+        if not items:
+            print("No items found in RSS feed")
             return None, None
             
-        latest_post = posts[0]
-        post_url = f"https://{subdomain}.substack.com/p/{latest_post['slug']}"
+        latest_item = items[0]
+        post_url = latest_item.find('link').text.strip()
+        
+        print(f"Found latest post URL from RSS: {post_url}")
         
         # Get the full post content
-        print(f"Fetching full post content from: {post_url}")
+        print(f"Fetching full post content...")
         post_response = requests.get(post_url, headers=headers, timeout=30)
         post_response.raise_for_status()
         
         return post_response.text, post_url
         
     except Exception as e:
-        print(f"Fallback method failed: {str(e)}")
+        print(f"RSS method failed: {str(e)}")
         return None, None
 
 
@@ -71,8 +77,8 @@ def get_latest_newsletter_html(newsletter_url: str) -> tuple[str, str]:
             print(f"Retrieved {len(posts) if posts else 0} posts with limit=5")
         
         if not posts:
-            print("substack-api failed, trying fallback method...")
-            html_content, post_url = get_latest_newsletter_via_api(newsletter_url)
+            print("substack-api failed, trying RSS feed method...")
+            html_content, post_url = get_latest_newsletter_via_rss(newsletter_url)
             
             if html_content and post_url:
                 print(f"Successfully fetched via fallback: {post_url}")
