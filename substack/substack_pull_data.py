@@ -3,6 +3,7 @@ import requests
 import json
 from bs4 import BeautifulSoup
 import re
+from urllib.parse import quote
 
 
 def get_latest_newsletter_via_rss(newsletter_url: str) -> tuple[str, str]:
@@ -96,7 +97,57 @@ def get_latest_newsletter_via_rss(newsletter_url: str) -> tuple[str, str]:
             else:
                 break
     
-    print("All RSS attempts failed")
+    print("All RSS attempts failed, trying proxy services...")
+    
+    # Try RSS proxy services as last resort
+    encoded_url = quote(rss_url, safe='')
+    proxy_services = [
+        f"https://api.rss2json.com/v1/api.json?rss_url={encoded_url}",
+        f"https://cors-anywhere.herokuapp.com/{rss_url}",
+        f"https://rss-proxy.herokuapp.com/v1?url={encoded_url}"
+    ]
+    
+    for proxy_url in proxy_services:
+        try:
+            print(f"Trying proxy: {proxy_url[:50]}...")
+            headers = {'User-Agent': 'RSS Reader'}
+            response = requests.get(proxy_url, headers=headers, timeout=30)
+            
+            if 'rss2json' in proxy_url:
+                # Handle rss2json format
+                data = response.json()
+                if data.get('status') == 'ok' and data.get('items'):
+                    latest_item = data['items'][0]
+                    post_url = latest_item['link']
+                    
+                    # Get content from RSS description or fetch full post
+                    content = latest_item.get('content', latest_item.get('description', ''))
+                    if len(content) < 1000:  # If content is too short, fetch full post
+                        post_response = requests.get(post_url, headers={'User-Agent': 'Mozilla/5.0 (compatible; RSS Reader)'}, timeout=30)
+                        content = post_response.text
+                    
+                    print(f"Success via rss2json! Post: {post_url}")
+                    return content, post_url
+            else:
+                # Handle direct proxy response
+                response.raise_for_status()
+                soup = BeautifulSoup(response.text, 'xml')
+                items = soup.find_all('item')
+                
+                if items:
+                    latest_item = items[0]
+                    post_url = latest_item.find('link').text.strip()
+                    
+                    # Get full post content
+                    post_response = requests.get(post_url, headers={'User-Agent': 'Mozilla/5.0 (compatible; RSS Reader)'}, timeout=30)
+                    
+                    print(f"Success via proxy! Post: {post_url}")
+                    return post_response.text, post_url
+                    
+        except Exception as e:
+            print(f"Proxy failed: {str(e)}")
+            continue
+    
     return None, None
 
 
