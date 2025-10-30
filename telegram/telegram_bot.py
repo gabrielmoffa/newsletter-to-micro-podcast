@@ -98,8 +98,6 @@ class TelegramBot:
         if newsletter_url:
             caption += f"\n\n📖 <b>Read the full newsletter:</b>\n{newsletter_url}"
         
-        caption += "\n\n#Podcast #Newsletter #DailyUpdate"
-        
         return self.send_audio(chat_id, audio_path, caption, episode_title)
     
     def get_chat_info(self, chat_id: str) -> dict:
