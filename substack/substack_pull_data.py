@@ -1,5 +1,6 @@
 import requests
 import json
+import time
 from bs4 import BeautifulSoup
 from urllib.parse import quote
 
@@ -21,10 +22,13 @@ def get_latest_newsletter_html(newsletter_url: str) -> tuple[str, str]:
     rss_url = f"https://{subdomain}.substack.com/feed"
     
     # Use RSS proxy services that work reliably in GitHub Actions
-    encoded_url = quote(rss_url, safe='')
+    # Add cache-busting parameters to force fresh RSS data
+    cache_buster = int(time.time())
+    rss_url_with_cache_buster = f"{rss_url}?t={cache_buster}&refresh=1"
+    encoded_url = quote(rss_url_with_cache_buster, safe='')
     proxy_services = [
         f"https://api.rss2json.com/v1/api.json?rss_url={encoded_url}",
-        f"https://cors-anywhere.herokuapp.com/{rss_url}",
+        f"https://cors-anywhere.herokuapp.com/{rss_url_with_cache_buster}",
         f"https://rss-proxy.herokuapp.com/v1?url={encoded_url}"
     ]
     
