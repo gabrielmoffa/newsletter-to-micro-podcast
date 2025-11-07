@@ -2,6 +2,8 @@
 
 Automatically converts Substack newsletters into audio podcasts and publishes them to Telegram channels.
 
+Hear the results here: https://t.me/+xE1w3rHnZvgwMzc0
+
 ## Overview
 
 This automation pipeline:
