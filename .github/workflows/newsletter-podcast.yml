@@ -32,6 +32,7 @@ jobs:
         OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         REPLICATE_API_TOKEN: ${{ secrets.REPLICATE_API_TOKEN }}
         TELEGRAM_API_BOT: ${{ secrets.TELEGRAM_API_BOT }}
+        FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
       run: python main.py
     
     - name: Notify on failure
