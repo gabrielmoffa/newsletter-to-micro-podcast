@@ -12,6 +12,7 @@ sys.path.append(str(Path(__file__).parent))
 from substack.substack_pull_data import get_latest_newsletter_html
 from substack.substack_clean_up import clean_newsletter_html
 from ai.newsletter_to_podcast_transcript import transform_newsletter_to_podcast
+from ai.newsletter_summary import generate_newsletter_summary
 from ai.transcript_tts import text_to_speech
 from telegram.telegram_bot import TelegramBot
 
@@ -45,6 +46,11 @@ def run_newsletter_to_podcast_pipeline(newsletter_url: str = "https://giadafromg
         print("\n🎙️ Step 3: Generating podcast transcript...")
         podcast_script = transform_newsletter_to_podcast(clean_text)
         print(f"✅ Podcast script generated ({len(podcast_script)} characters)")
+
+        # Step 3b: Generate written summary
+        print("\n📝 Step 3b: Generating written summary...")
+        summary = generate_newsletter_summary(clean_text)
+        print(f"✅ Summary generated ({len(summary)} characters)")
         
         # Step 4: Convert to audio
         print("\n🔊 Step 4: Converting to audio...")
@@ -59,8 +65,8 @@ def run_newsletter_to_podcast_pipeline(newsletter_url: str = "https://giadafromg
         today = datetime.now().strftime("%B %d, %Y")
         episode_title = f"Daily Newsletter Podcast - {today}"
         
-        # Send the audio file with newsletter link in caption
-        response = bot.send_podcast_episode(channel_id, str(audio_path), episode_title, latest_post_url)
+        # Send the audio file with summary and newsletter link in caption
+        response = bot.send_podcast_episode(channel_id, str(audio_path), episode_title, latest_post_url, summary)
         
         if response.get('ok'):
             print("✅ Successfully sent podcast with newsletter link to Telegram!")
